@@ -1,0 +1,55 @@
+#!/bin/bash
+set -euo pipefail
+
+script_dir="$(dirname "$0")"
+stanford_semgmenter="${stanford_semgmenter:-$script_dir/stanford-segmenter-2020-11-17}"
+uetsegmenter="${uetsegmenter:-$script_dir/UETsegmenter}"
+
+lang="$1"
+
+tokenize() {
+    lng="$1"
+    case "$lng" in
+        ja)
+            mecab \
+                -r "$VIRTUAL_ENV/lib/python3.10/site-packages/ipadic/dicdir/mecabrc" \
+                -d "$VIRTUAL_ENV/lib/python3.10/site-packages/ipadic/dicdir" \
+                -Owakati
+            ;;
+        ko)
+            mecab \
+                -r "$VIRTUAL_ENV/lib/python3.10/site-packages/mecab_ko_dic/dicdir/mecabrc" \
+                -d "$VIRTUAL_ENV/lib/python3.10/site-packages/mecab_ko_dic/dicdir" \
+                -Owakati
+            ;;
+        zh)
+            "$stanford_semgmenter/segment.sh" pku <(cat) utf-8 0 2>/dev/null
+            ;;
+        th)
+            tempfile="$(mktemp)"
+            cat >> "$tempfile"
+            attacut-cli "$tempfile" --dest=/dev/stdout
+            rm "$tempfile"
+            #thainlp tokenize word --sep " " --algo attacut "$(cat)"
+            ;;
+        vi)
+            tempfile=$(mktemp)
+            cat > "$tempfile"
+            # UETsegmenter assumes dictionaries to be at ./dictionary/
+            cd "$uetsegmenter"
+            java -jar "$uetsegmenter/uetsegmenter.jar" \
+                -r seg \
+                -m ~/.local/src/UETsegmenter/models \
+                -i "$tempfile" \
+                -o /dev/stdout
+            rm "$tempfile"
+            cd -
+            ;;
+        *)
+            #cat
+            sacremoses -l "$lng" tokenize -x
+            ;;
+    esac
+}
+
+tokenize "$lang"
